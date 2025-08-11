@@ -1,205 +1,113 @@
-import random
+# chess_simulation_main.py
 import pygame
-from pieces import Bishop, Rook, pos_to_coords, coords_to_pos
-from board import draw_board, TILE_SIZE
-
-def draw_button(screen, rect, text, font, active=True):
-    color = (0, 150, 0) if active else (100, 100, 100)
-    pygame.draw.rect(screen, color, rect)
-    text_surf = font.render(text, True, (255, 255, 255))
-    text_rect = text_surf.get_rect(center=rect.center)
-    screen.blit(text_surf, text_rect)
-
-def animate_rook_move(screen, rook, direction, steps, bishop):
-    board_rect = pygame.Rect(0, 0, TILE_SIZE * 8, TILE_SIZE * 8)
-    for step in range(steps):
-        if direction == "up":
-            rook.move_up(1)
-        else:
-            rook.move_right(1)
-
-        # Clear and redraw only board area
-        screen.fill((255, 255, 255), board_rect)
-        draw_board(screen, bishop, rook)
-
-        pygame.display.update(board_rect)  # Update just the board
-        pygame.time.delay(150)  # delay for animation smoothness
+from graphics import TILE_SIZE, draw_board, draw_button
+from pieces import coords_to_pos
+from game import GameState
 
 def play_game():
     pygame.init()
-    screen = pygame.display.set_mode((TILE_SIZE * 8, TILE_SIZE * 8 + 200))
+    screen = pygame.display.set_mode((TILE_SIZE * 8, TILE_SIZE * 8 + 200), pygame.RESIZABLE)
     pygame.display.set_caption("Rook vs Bishop")
 
     font = pygame.font.SysFont(None, 24)
     big_font = pygame.font.SysFont(None, 36)
 
-    stationary_button = pygame.Rect(TILE_SIZE * 1, TILE_SIZE * 8 + 90, TILE_SIZE * 3, 40)
-    human_button = pygame.Rect(TILE_SIZE * 4, TILE_SIZE * 8 + 90, TILE_SIZE * 3, 40)
-    restart_button = pygame.Rect(TILE_SIZE * 3, TILE_SIZE * 8 + 150, TILE_SIZE * 2, 40)
-
-    bishop_mode = None
-    bishop_wins = 0
-    rook_wins = 0
-
-    ROOK_MOVE = 0
-    BISHOP_MOVE = 1
-    GAME_OVER = 2
-
-    bishop = None
-    rook = None
-    round_num = 1
-    max_rounds = 15
-    game_over = False
-    message = ""
-    state = None
-
-    def reset_game():
-        nonlocal bishop, rook, round_num, max_rounds, game_over, message, state
-        bishop = Bishop(*pos_to_coords("c3"))
-        rook = Rook(*pos_to_coords("h1"))
-        round_num = 1
-        max_rounds = 15
-        game_over = False
-        message = "Rook moves first."
-        state = ROOK_MOVE
-
+    game = GameState()
     clock = pygame.time.Clock()
 
-    while True:
+    running = True
+    while running:
+        width, height = screen.get_size()
+        board_height = TILE_SIZE * 8
+        button_width = width // 3
+        button_height = 40
+        button_y = board_height + 20
+
+        # Dynamically position buttons based on current window size
+        stationary_button = pygame.Rect(width // 8, button_y, button_width, button_height)
+        human_button = pygame.Rect(width // 2, button_y, button_width, button_height)
+        restart_button = pygame.Rect(width // 3, button_y + 60, button_width, button_height)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                return
+                running = False
 
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # Mode buttons (always active)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if stationary_button.collidepoint(event.pos):
-                    if bishop_mode != "stationary":
-                        bishop_mode = "stationary"
-                        reset_game()
-                        print("Bishop mode: Stationary")
+                    if game.bishop_mode != "stationary":
+                        game.bishop_mode = "stationary"
+                        game.reset_game()
                 elif human_button.collidepoint(event.pos):
-                    if bishop_mode != "human":
-                        bishop_mode = "human"
-                        reset_game()
-                        print("Bishop mode: Human-controlled")
-                # Restart button (only on game over)
-                elif state == GAME_OVER and restart_button.collidepoint(event.pos):
-                    reset_game()
-                # Bishop move input if human-controlled and bishop turn
-                elif state == BISHOP_MOVE and bishop_mode == "human" and not game_over:
+                    if game.bishop_mode != "human":
+                        game.bishop_mode = "human"
+                        game.reset_game()
+                elif game.state == GameState.GAME_OVER and restart_button.collidepoint(event.pos):
+                    game.reset_game()
+                elif (game.state == GameState.BISHOP_MOVE and 
+                      game.bishop_mode == "human" and not game.game_over):
                     mouse_x, mouse_y = event.pos
-                    if mouse_y <= TILE_SIZE * 8:
+                    if mouse_y <= board_height:
                         file_clicked = mouse_x // TILE_SIZE
                         rank_clicked = 7 - (mouse_y // TILE_SIZE)
 
-                        if bishop.is_valid_move(file_clicked, rank_clicked):
-                            bishop.move(file_clicked, rank_clicked)
-                            message = f"Bishop moved to {coords_to_pos((file_clicked, rank_clicked))}"
-                            state = ROOK_MOVE
-                            round_num += 1
-
-                            if bishop.can_capture(rook):
-                                message = f"🏆 Bishop captures Rook at {coords_to_pos((rook.file, rook.rank))} — You win!"
-                                game_over = True
-                                state = GAME_OVER
-                                bishop_wins += 1
+                        if game.bishop.is_valid_move(file_clicked, rank_clicked):
+                            game.bishop.move(file_clicked, rank_clicked)
+                            game.message = f"Bishop moved to {coords_to_pos((file_clicked, rank_clicked))}"
+                            game.state = GameState.ROOK_MOVE
+                            game.round_num += 1
+                            if game.bishop.can_capture(game.rook):
+                                game.message = f"🏆 Bishop captures Rook at {coords_to_pos((game.rook.file, game.rook.rank))} — You win!"
+                                game.game_over = True
+                                game.state = GameState.GAME_OVER
+                                game.bishop_wins += 1
                         else:
-                            message = "Invalid bishop move. Try again."
+                            game.message = "Invalid bishop move. Try again."
 
-        if bishop_mode is None:
-            # Show prompt and mode buttons only
+        if game.bishop_mode is None:
             screen.fill((240, 240, 240))
             prompt = font.render("Choose Bishop Mode:", True, (0, 0, 0))
-            screen.blit(prompt, (TILE_SIZE * 2, TILE_SIZE * 8))
+            screen.blit(prompt, (width // 3, board_height))
             draw_button(screen, stationary_button, "Stationary Bishop", font, active=False)
             draw_button(screen, human_button, "Human-controlled Bishop", font, active=False)
             pygame.display.flip()
             clock.tick(30)
             continue
 
-        if state == ROOK_MOVE and not game_over:
-            direction = random.choice(["up", "right"])
-            steps = random.randint(1, 6) + random.randint(1, 6)
-            print(f"Round {round_num}: Coin toss -> {direction}, Dice -> {steps}")
-
-            message = f"Round {round_num}: Rook moving {direction} by {steps} steps..."
-
-            # Draw full UI once before animation
+        if game.state == GameState.ROOK_MOVE and not game.game_over:
+            # Draw the board before animation
             screen.fill((255, 255, 255))
-            draw_board(screen, bishop, rook)
-
-            pygame.draw.rect(screen, (200, 200, 200), (0, TILE_SIZE * 8, TILE_SIZE * 8, 40))
-            msg_surface = font.render(message, True, (0, 0, 0))
-            screen.blit(msg_surface, (10, TILE_SIZE * 8 + 10))
-
-            pygame.draw.rect(screen, (230, 230, 230), (0, TILE_SIZE * 8 + 40, TILE_SIZE * 8, 40))
-            score_text = f"Score — Bishop: {bishop_wins} | Rook: {rook_wins}"
-            score_surface = font.render(score_text, True, (0, 0, 0))
-            screen.blit(score_surface, (10, TILE_SIZE * 8 + 50))
-
-            draw_button(screen, stationary_button, "Stationary Bishop", font, active=(bishop_mode=="stationary"))
-            draw_button(screen, human_button, "Human-controlled Bishop", font, active=(bishop_mode=="human"))
-            if state == GAME_OVER:
-                pygame.draw.rect(screen, (100, 200, 100), restart_button)
-                restart_text = big_font.render("Restart", True, (0, 0, 0))
-                text_rect = restart_text.get_rect(center=restart_button.center)
-                screen.blit(restart_text, text_rect)
-
+            draw_board(screen, game.bishop, game.rook)
             pygame.display.flip()
 
-            # Animate rook move — only redraw board inside animation
-            animate_rook_move(screen, rook, direction, steps, bishop)
+            # Animate rook move (this will update board internally)
+            game.animate_rook_move(screen)
 
-            print(f"Rook at {coords_to_pos((rook.file, rook.rank))}")
+        # Draw UI elements every frame outside animation
+        screen.fill((255, 255, 255))
+        draw_board(screen, game.bishop, game.rook)
 
-            message = f"Round {round_num}: Rook moved {direction} by {steps} steps to {coords_to_pos((rook.file, rook.rank))}."
+        pygame.draw.rect(screen, (200, 200, 200), (0, board_height, width, 40))
+        msg_surface = font.render(game.message, True, (0, 0, 0))
+        screen.blit(msg_surface, (10, board_height + 10))
 
-            if bishop.can_capture(rook):
-                message += " Bishop captures rook! Bishop wins!"
-                print(message)
-                game_over = True
-                state = GAME_OVER
-                bishop_wins += 1
-            else:
-                if bishop_mode == "human":
-                    message += " Your turn: Move the bishop."
-                    state = BISHOP_MOVE
-                else:
-                    round_num += 1
-                    if round_num > max_rounds:
-                        message = f"Rook survives all {max_rounds} rounds — Rook wins!"
-                        print(message)
-                        game_over = True
-                        state = GAME_OVER
-                        rook_wins += 1
+        pygame.draw.rect(screen, (230, 230, 230), (0, board_height + 40, width, 40))
+        score_text = f"Score — Bishop: {game.bishop_wins} | Rook: {game.rook_wins}"
+        score_surface = font.render(score_text, True, (0, 0, 0))
+        screen.blit(score_surface, (10, board_height + 50))
 
-        # Draw everything every frame outside animation
-        if state != ROOK_MOVE:
-            screen.fill((255, 255, 255))
-            draw_board(screen, bishop, rook)
+        draw_button(screen, stationary_button, "Stationary Bishop", font, active=(game.bishop_mode == "stationary"))
+        draw_button(screen, human_button, "Human-controlled Bishop", font, active=(game.bishop_mode == "human"))
 
-            pygame.draw.rect(screen, (200, 200, 200), (0, TILE_SIZE * 8, TILE_SIZE * 8, 40))
-            msg_surface = font.render(message, True, (0, 0, 0))
-            screen.blit(msg_surface, (10, TILE_SIZE * 8 + 10))
+        if game.state == GameState.GAME_OVER:
+            pygame.draw.rect(screen, (100, 200, 100), restart_button)
+            restart_text = big_font.render("Restart", True, (0, 0, 0))
+            text_rect = restart_text.get_rect(center=restart_button.center)
+            screen.blit(restart_text, text_rect)
 
-            pygame.draw.rect(screen, (230, 230, 230), (0, TILE_SIZE * 8 + 40, TILE_SIZE * 8, 40))
-            score_text = f"Score — Bishop: {bishop_wins} | Rook: {rook_wins}"
-            score_surface = font.render(score_text, True, (0, 0, 0))
-            screen.blit(score_surface, (10, TILE_SIZE * 8 + 50))
-
-            draw_button(screen, stationary_button, "Stationary Bishop", font, active=(bishop_mode=="stationary"))
-            draw_button(screen, human_button, "Human-controlled Bishop", font, active=(bishop_mode=="human"))
-
-            if state == GAME_OVER:
-                pygame.draw.rect(screen, (100, 200, 100), restart_button)
-                restart_text = big_font.render("Restart", True, (0, 0, 0))
-                text_rect = restart_text.get_rect(center=restart_button.center)
-                screen.blit(restart_text, text_rect)
-
-            pygame.display.flip()
-
+        pygame.display.flip()
         clock.tick(60)
+
+    pygame.quit()
 
 if __name__ == "__main__":
     play_game()

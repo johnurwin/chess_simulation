@@ -22,13 +22,9 @@ class Bishop(Piece):
         return abs(self.file - target.file) == abs(self.rank - target.rank)
     
     def is_valid_move(self, new_file, new_rank):
-        # Check diagonal move and that the path is clear
         delta_file = abs(new_file - self.file)
         delta_rank = abs(new_rank - self.rank)
-        if delta_file == delta_rank and delta_file != 0:
-            # Optionally check no pieces in the way (if you track that)
-            return True
-        return False
+        return delta_file == delta_rank and delta_file != 0
 
     def move(self, new_file, new_rank):
         self.file = new_file
